@@ -1,34 +1,44 @@
-FROM node:22.21.1-alpine AS base
-WORKDIR /usr/src/wpp-server
-ENV NODE_ENV=production PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
-COPY package.json ./
-RUN apk update && \
-    apk add --no-cache \
-    vips-dev \
-    fftw-dev \
-    gcc \
-    g++ \
-    make \
-    libc6-compat \
-    && rm -rf /var/cache/apk/*
-RUN yarn install --production --pure-lockfile && \
-    yarn add sharp --ignore-engines && \
-    yarn cache clean
+# Base estable: Node 20 LTS (Debian)
+FROM node:20-bullseye
 
-FROM base AS build
+# Evita prompts y reduce layer size
+ENV DEBIAN_FRONTEND=noninteractive
+
+# Instala dependencias del sistema:
+# - libvips (requerido por sharp)
+# - chromium (para puppeteer)
+# - dumb-init (arranque limpio)
+RUN apt-get update && apt-get install -y \
+    chromium \
+    libvips \
+    libvips-dev \
+    dumb-init \
+ && rm -rf /var/lib/apt/lists/*
+
+# Variables recomendadas para puppeteer/chromium
+ENV CHROME_PATH=/usr/bin/chromium \
+    CHROME_ARGS="--no-sandbox --disable-dev-shm-usage --disable-gpu" \
+    PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true \
+    NODE_ENV=production
+
+# Directorio de trabajo
 WORKDIR /usr/src/wpp-server
-ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
-COPY package.json  ./
-RUN yarn install --production=false --pure-lockfile
-RUN yarn cache clean
+
+# Copia package.json/yarn.lock primero para cache
+COPY package.json yarn.lock ./
+
+# Instala dependencias (sin opcionales problemáticos)
+RUN yarn install --frozen-lockfile --ignore-optional
+
+# Copia el resto del código
 COPY . .
+
+# Build
 RUN yarn build
 
-FROM base
-WORKDIR /usr/src/wpp-server/
-RUN apk add --no-cache chromium
-RUN yarn cache clean
-COPY . .
-COPY --from=build /usr/src/wpp-server/ /usr/src/wpp-server/
+# Puerto del server
+ENV SERVER_PORT=21465
 EXPOSE 21465
-ENTRYPOINT ["node", "dist/server.js"]
+
+# Inicia con dumb-init para señales limpias
+CMD ["dumb-init","node","dist/server.js"]
