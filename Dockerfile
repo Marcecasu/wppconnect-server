@@ -24,11 +24,12 @@ ENV CHROME_PATH=/usr/bin/chromium \
 # Directorio de trabajo
 WORKDIR /usr/src/wpp-server
 
-# Copia package.json/yarn.lock primero para cache
-COPY package.json yarn.lock ./
+# Copia solo package.json primero para cache
+COPY package.json ./
 
 # Instala dependencias (sin opcionales problemáticos)
-RUN yarn install --frozen-lockfile --ignore-optional
+RUN yarn install --ignore-optional
+
 
 # Copia el resto del código
 COPY . .
