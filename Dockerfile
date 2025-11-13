@@ -30,7 +30,6 @@ COPY package.json ./
 # Instala dependencias (sin opcionales problemáticos)
 RUN yarn install --ignore-optional
 
-
 # Copia el resto del código
 COPY . .
 
