@@ -28,7 +28,7 @@ WORKDIR /usr/src/wpp-server
 COPY package.json ./
 
 # Instala dependencias (sin opcionales problemáticos)
-RUN yarn install --ignore-optional
+RUN YARN_IGNORE_ENGINES=1 yarn install --ignore-optional
 
 # Copia el resto del código
 COPY . .
