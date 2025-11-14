@@ -1,44 +1,32 @@
-# Base estable: Node 20 LTS (Debian)
-FROM node:20-bullseye
+FROM node:22-bullseye
 
-# Evita prompts y reduce layer size
+# Evita prompts
 ENV DEBIAN_FRONTEND=noninteractive
 
-# Instala dependencias del sistema:
-# - libvips (requerido por sharp)
-# - chromium (para puppeteer)
-# - dumb-init (arranque limpio)
+# Instalar dependencias del sistema
 RUN apt-get update && apt-get install -y \
     chromium \
     libvips \
     libvips-dev \
     dumb-init \
- && rm -rf /var/lib/apt/lists/*
+    && rm -rf /var/lib/apt/lists/*
 
-# Variables recomendadas para puppeteer/chromium
-ENV CHROME_PATH=/usr/bin/chromium \
-    CHROME_ARGS="--no-sandbox --disable-dev-shm-usage --disable-gpu" \
-    PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true \
-    NODE_ENV=production
-
-# Directorio de trabajo
 WORKDIR /usr/src/wpp-server
 
-# Copia solo package.json primero para cache
+# Copiar package.json y yarn.lock (si existe)
 COPY package.json ./
+COPY yarn.lock ./
 
-# Instala dependencias (sin opcionales problemáticos)
-RUN YARN_IGNORE_ENGINES=1 yarn install --ignore-optional
+# Instalar dependencias
+RUN yarn install --ignore-optional
 
-# Copia el resto del código
+# Copiar el resto del código
 COPY . .
 
 # Build
 RUN yarn build
 
-# Puerto del server
-ENV SERVER_PORT=21465
+# Puerto del servidor
 EXPOSE 21465
 
-# Inicia con dumb-init para señales limpias
-CMD ["dumb-init","node","dist/server.js"]
+CMD ["node", "dist/server.js"]
