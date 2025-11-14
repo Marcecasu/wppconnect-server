@@ -1,33 +1,56 @@
-FROM node:22-bullseye
+FROM node:22.21.1-alpine AS base
 
-# Evitar prompts
-ENV DEBIAN_FRONTEND=noninteractive
-
-# Directorio de trabajo
 WORKDIR /usr/src/wpp-server
 
-# Dependencias del sistema necesarias para chromium y sharp
-RUN apt-get update && apt-get install -y \
-    chromium \
-    libvips \
-    libvips-dev \
-    dumb-init \
- && rm -rf /var/lib/apt/lists/*
+ENV NODE_ENV=production \
+    PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
 
-# Copiar archivos necesarios para instalar dependencias
-COPY package.json yarn.lock ./
+# Copia solo package.json para aprovechar cache
+COPY package.json ./
 
-# Respetar versión de node requerida por engines
-RUN yarn install --ignore-optional
+# Instala dependencias del sistema necesarias para sharp/libvips
+RUN apk update && \
+    apk add --no-cache \
+      vips-dev \
+      fftw-dev \
+      gcc \
+      g++ \
+      make \
+      libc6-compat \
+    && rm -rf /var/cache/apk/*
 
-# Copiar todo el proyecto
+# Instala dependencias de Node + sharp
+RUN yarn install --production --pure-lockfile && \
+    yarn add sharp --ignore-engines && \
+    yarn cache clean
+
+# --------- Etapa de build ---------
+FROM base AS build
+
+WORKDIR /usr/src/wpp-server
+ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
+
+COPY package.json ./
+RUN yarn install --production=false --pure-lockfile
+RUN yarn cache clean
+
+# Copia el código fuente y compila
 COPY . .
-
-# Build de Typescript
 RUN yarn build
 
-# Puerto del servidor
+# --------- Imagen final ---------
+FROM base
+
+WORKDIR /usr/src/wpp-server/
+
+# Chromium para los recursos que lo usan
+RUN apk add --no-cache chromium
+RUN yarn cache clean
+
+# Copia el código y el build
+COPY . .
+COPY --from=build /usr/src/wpp-server/ /usr/src/wpp-server/
+
 EXPOSE 21465
 
-# Iniciar con dumb-init para evitar zombies
-CMD ["dumb-init", "yarn", "start"]
+ENTRYPOINT ["node", "dist/server.js"]
