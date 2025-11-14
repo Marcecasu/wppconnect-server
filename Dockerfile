@@ -1,7 +1,12 @@
-# Usar Node 22 para respetar el "engine" que pide @wppconnect/server
 FROM node:22-bullseye
 
-# Instalar dependencias del sistema (chromium + libvips para sharp)
+# Evitar prompts
+ENV DEBIAN_FRONTEND=noninteractive
+
+# Directorio de trabajo
+WORKDIR /usr/src/wpp-server
+
+# Dependencias del sistema necesarias para chromium y sharp
 RUN apt-get update && apt-get install -y \
     chromium \
     libvips \
@@ -9,27 +14,20 @@ RUN apt-get update && apt-get install -y \
     dumb-init \
  && rm -rf /var/lib/apt/lists/*
 
-# Carpeta de trabajo dentro del contenedor
-WORKDIR /usr/src/wpp-server
+# Copiar archivos necesarios para instalar dependencias
+COPY package.json yarn.lock ./
 
-# Copiar sólo package.json (NO yarn.lock, porque no existe)
-COPY package.json ./
-
-# Instalar dependencias (sin opcionales problemáticos)
+# Respetar versión de node requerida por engines
 RUN yarn install --ignore-optional
 
-# Copiar el resto del código fuente
+# Copiar todo el proyecto
 COPY . .
 
-# Compilar el proyecto (esto genera la carpeta dist/)
+# Build de Typescript
 RUN yarn build
 
-# Variables básicas
-ENV NODE_ENV=production \
-    HOST=0.0.0.0 \
-    PORT=21465
-
+# Puerto del servidor
 EXPOSE 21465
 
-# Comando para iniciar el servidor
+# Iniciar con dumb-init para evitar zombies
 CMD ["dumb-init", "yarn", "start"]
